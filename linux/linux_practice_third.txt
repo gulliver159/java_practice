@@ -1,0 +1,120 @@
+Task1
+Сгенерировать набор файлов вида
+YYYY-mm-dd.csv
+по каждому дню за год с содержимым такого вида (числовые поля заполнить случайными  значениями):
+cite        ; country ; date       ; views ; clicks
+www.abc.com ; USA     ; 2017-01-01 ; 1000  ; 3
+www.cba.com ; France  ; 2017-01-01 ; 750   ; 0
+
+vi script1  заходим в редактор vi
+Пишем следующий скрипт:
+#!/bin/bash
+
+mkdir task1
+
+for ((a=0; a<365; a++))
+do
+date=$(date -d "2020-01-01 + ${a} day" '+%Y-%m-%d')
+file="task1/${date}.csv"
+touch ${file}
+echo "cite; country; date; views; clicks" >> ${file}
+echo "www.abc.com ; USA; ${date}; $RANDOM; $RANDOM" >> ${file}
+echo "www.cba.com; France; ${date}; $RANDOM; $RANDOM" >> ${file}
+done
+
+:wq  выходим из редактора с сохранением
+
+chmod 766 script1  даем владельцу права на исполнение
+./script1  и запускаем скрипт
+
+
+В условиях предыдущей задачи 
+Проверить, что все файлы за год присутствуют и нет лишних.
+Во всех исходных файлах переставить дату на первое место и привести к виду dd/mm/YYYY:
+date       ; cite        ; country ; views ; clicks
+01/01/2017 ; www.abc.com ; usa     ; 1000  ; 3
+01/01/2017 ; www.cba.com ; France  ; 750   ; 0
+
+
+#!/bin/bash
+
+n_files=$(ls task1 | wc -l)
+if (( ${n_files} < 365 )); then
+echo "В каталоге не хватает файлов"
+for ((a=0; a<365; a++))
+do
+file="task1/$(date -d "2020-01-01 + ${a} day" '+%Y-%m-%d').csv"
+if ! test -f "${file}"
+then
+echo "Файл ${file} не присутствует в каталоге"
+fi
+done
+elif (( ${n_files} > 365 )); then
+echo "В каталоге присутствуют лишние файлы"
+else
+echo "В каталоге присутствуют все нужные файлы и нет лишних"
+fi
+
+for ((a=0; a<365; a++))
+do
+file="task1/$(date -d "2020-01-01 + ${a} day" '+%Y-%m-%d').csv"
+while read line; do 
+IFS=';' read -ra array <<< "$line"
+sed -i "s/${line}/${array[2]}; ${array[0]}; ${array[1]}; ${array[3]}; ${array[4]}/g" ${file}
+done < ${file}
+sed -i 's/\([0-9][0-9][0-9][0-9]\)-\([0-9][0-9]\)-\([0-9][0-9]\)/\3\/\2\/\1/g' ${file}
+done
+
+
+
+
+Task3
+Сформировать набор файлов monday.csv, tuesday.csv и т.д. куда вывести содержимое всех исходных файлов отдельно по каждому дню недели. Строку заголовка вывести один раз. Исходные файлы удалить.
+
+#!/bin/bash
+
+mkdir task3
+
+for ((a=0; a<365; a++))
+do
+file="task1/$(date -d "2020-01-01 + ${a} day" '+%Y-%m-%d').csv"
+file_weekday="task3/$(date -d "2020-01-01 + ${a} day" +%A).csv"
+# Если такого файла еще не создавали то копируем туда вместе с заголовком, если уже существует, то все строки, кроме первой
+if ! test -f "${file_weekday}"
+then
+cat ${file} >> ${file_weekday}
+else
+tail -n+2 ${file} >> ${file_weekday}
+fi
+done
+
+rm -r task1  # или в цикле rm ${file}
+
+
+
+Task4
+Вывести в отдельный файл содержимое всех файлов *.java из своего репозитория (локальный проект заочной школы или любой другой, где есть java классы), в которых встречается ArrayList. 
+
+#!/bin/bash
+
+for file in $(find ~/Thumbtack -iname '*.java' -type f -exec grep -Rl ArrayList {} \;)
+do
+cat ${file} >> task4.txt
+done
+
+
+Task5
+Вывести содержимое каталога /etc (каждая строка с полным путем) затем заменить первые вхождения ‘/’ на “C:\”, остальные на ‘\’
+
+
+#!/bin/bash
+
+files=$(find /etc)  #если прописать полный путь до папки, то и файлы выведутся с полным путем
+echo ${files}
+echo
+for line in ${files}; do
+sed -e '0,/\//{s/\//C:\\/} ' -e 's/\//\\/g' <<< ${line}
+done
+
+
+Просьба проверить последний пункт во втором занятии))

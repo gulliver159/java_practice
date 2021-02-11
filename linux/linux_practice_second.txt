@@ -1,0 +1,195 @@
+SSH
+
+Запустить две виртуальные машины, созданные ранее (будем называть их WORKSTATION и SERVER), зайти по ssh из WORKSTATION на SERVER. Сгенерировать пару ключей и настроить по ним доступ. Приватный ключ защитить паролем. После настройки доступа по ключам отключите доступ по паролю.
+
+Устанавливаем openssh
+ssh ekaterina@192.168.56.101  заходим на сервер с ip 192.168.56.101 под пользователем ekaterina
+exit  и выходим))
+ssh-keygen  генерируем пару ssh ключей (приватный и публичный)
+cd .ssh
+ssh-copy-id -i id_rsa.pub ekaterina@192.168.56.101  загружаем публичный ключ на сервер
+
+Теперь отключаем доступ по паролю
+sudo vi /etc/ssh/sshd_config  заходим в редактор настроек ssh
+PasswordAuthentication no  выставляем PasswordAuthentication на no
+systemctl restart ssh   перезапускаем службу ssh
+
+
+
+Установка сервиса на удаленной машине
+
+Установить на сервере java. Скопировать на SERVER приложение webHelloWorld (jar файл) и запустить. Выполнить в двух вариантах, с помощью команды screen и в виде службы systemd. Запустить journalctl для просмотра логов. 
+Эту часть задания можно считать выполненной, если по адресу http://IP_сервера:4567/hello в браузере придет ответ, а в логах journalctl будет информация о запросах
+
+screen   запускаем текстовый редактор, для устойчивого соединения с сервером
+ssh ekaterina@192.168.56.101  подключаемся к серверу теперь без ввода пароля
+sudo apt-get update  обновляем apt-get
+sudo apt-get install default-jdk  и устанавливаем java
+exit    выходим с сервера
+scp WebHelloWorld/target/WebHelloWorld.jar ekaterina@192.168.56.101:~   и перекидываем файл jar на сервер в домашний каталог
+
+Добавляем юнит в каталог для юнитов, созданных администратором
+sudo touch /etc/systemd/system/helloworld.service
+sudo nano /etc/systemd/system/helloworld.service
+В этот файл прописываем три секции [Unit], [Service], [Install]
+[Unit]			
+Description=Helloworld service			
+[Service]			
+Type=simple			
+User=ekaterina			
+ExecStart=/usr/lib/jvm/java-11-openjdk-amd64/bin/java -jar WebHelloWorld.jar			
+ExecStop=/bin/kill -15 $MAINPID
+			
+[Install]			
+WantedBy=multi-user.target
+
+sudo systemctl daemon-reload   перегружаем демон systemd
+sudo systemctl enable helloworld.service  делаем наш юнит активным
+sudo systemctl start helloworld.service  и запускаем созданный нами сервис
+
+
+sudo journalctl -u helloworld  смотрим логи
+Вывод терминала:
+Sep 18 14:41:10 server systemd[1]: Started Helloworld service.
+Sep 18 14:41:21 server java[607]: [Thread-0] INFO org.eclipse.jetty.util.log - Logging initialized @5808ms to org.eclipse.jetty.util.log.Slf4jLog
+Sep 18 14:41:22 server java[607]: [Thread-0] INFO spark.embeddedserver.jetty.EmbeddedJettyServer - == Spark has ignited ...
+Sep 18 14:41:22 server java[607]: [Thread-0] INFO spark.embeddedserver.jetty.EmbeddedJettyServer - >> Listening on 0.0.0.0:4567
+Sep 18 14:41:23 server java[607]: [Thread-0] INFO org.eclipse.jetty.server.AbstractConnector - Started ServerConnector@303ec011{HTTP/1.1,[http/1.1]}{0.0.0.0:4567}
+
+Вывод в браезере по адресу: http://192.168.56.101:4567/hello
+Hello World
+
+Сетевые утилиты. 
+
+Запустить WebHelloWorld и проанализировать запросы и ответы с помощью ngrep.
+sudo ngrep -d lo -W byline port 4567
+
+T 127.0.0.1:41572 -> 127.0.0.1:4567 [AP] #7
+GET /hello HTTP/1.1.
+Host: 127.0.0.1:4567.
+
+T 127.0.0.1:4567 -> 127.0.0.1:41572 [AP] #9
+HTTP/1.1 200 OK.
+Date: Fri, 18 Sep 2020 17:54:03 GMT.
+Content-Type: text/html;charset=utf-8.
+Transfer-Encoding: chunked.
+Server: Jetty(9.4.z-SNAPSHOT).
+.
+B.
+Hello World
+
+
+
+Установить web сервер nginx, создать простую страницу, содержащую изображение, get и post формы,  файл для скачивания, форму file upload, установку cookie (например, средствами JS). Делать обработку этих действий не нужно. Цель задания - проанализировать как  выглядят запросы и ответы в протоколе HTTP.
+sudo apt install nginx
+sudo mkdir -p /var/www/mysite.ru/public_html  создаем директорию сайта
+sudo nano /var/www/mysite.ru/public_html/index.htm  создаем html страницу
+<html>
+  <head>
+    <title>mysite.ru</title>
+  </head>
+  <body>
+    <h1>Welcome to nginx!</h1>
+  </body>
+</html>
+
+Прописываем конфигурацию виртуального хоста:
+sudo nano /etc/nginx/sites-available/mysite.ru
+server {
+        listen   80;
+        root /var/www/mysite.ru/public_html;
+        index index.html index.htm;
+        server_name mysite.ru www.mysite.ru 127.0.0.1;
+}
+
+sudo ln -s /etc/nginx/sites-available/mysite.ru /etc/nginx/sites-enabled/mysite.ru
+создаем символическую ссылку между директорией sites-available, где лежит наш файл конфигурации, и sites-enabled (можно и сам файл, но при необходимости удалить файл, лучше удалить только ссылку, чтобы было проще ее вернуть назад, также проблемы с перемещением)
+sudo nginx -t  можно запустить диагностику
+вывод терминала:
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+sudo service nginx restart  запускаем сервер
+
+при перезагрузке страницы вывод ngrep
+T 127.0.0.1:49500 -> 127.0.0.1:80 [AP] #11
+  GET / HTTP/1.1..Host: 127.0.0.1..Connection: keep-alive..Cache-Control: max-age=0..Upgrade-Insecure-Requests: 1..                                                                                                               
+
+T 127.0.0.1:80 -> 127.0.0.1:49500 [AP] #13
+ HTTP/1.1 304 Not Modified..Server: nginx/1.18.0 (Ubuntu)..Date: Fri, 18 Sep 2020 19:25:41 GMT..Last-Modified: Fri, 18 Sep 2020 19:23:55 GMT..Connection: keep-alive                                                                                                                                        
+
+T 127.0.0.1:49500 -> 127.0.0.1:80 [AP] #15
+  GET /i.webp HTTP/1.1..Host: 127.0.0.1..Connection: keep-alive..If-Modified-Since: Fri, 18 Sep 2020 19:11:33 GMT.
+  Accept: image/webp,image
+  /apng,image/*,*/*;q=0.8..Sec-Fetch-Site: same-origin..
+  
+Вернулся код 304, то есть не было изменений
+При перегрузке страницы пришел ответ с информацией о коде и картинке, ответы от других элементов на странице не приходят получается
+  
+при скачивании файла:
+T 127.0.0.1:49546 -> 127.0.0.1:80 [AP] #172
+  GET /1.txt HTTP/1.1..Host: 127.0.0.1..                                                                  
+
+T 127.0.0.1:80 -> 127.0.0.1:49546 [AP] #174
+  HTTP/1.1 200 OK..Server: nginx/1.18.0 (Ubuntu)..Date: Fri, 18 Sep 2020 19:31:21 GMT..Content-Type: text/plain..Content-Length: 0..Last-Modified: Fri, 18 Sep 2020 1
+  9:17:18 GMT..Connection: keep-alive..ETag: "5f6507be-0"..Accept-Ranges: bytes....   
+Вернулся код 200, то есть ОК
+Получается сначала наш сайт передал файл локальной машине, а затем локальная машина отсылает сайту сообщение об успешном выполнении опреации
+  
+При переходе на несуществующую ссылку:
+  GET /catalog/?screen=4.5&color_black=on&color_white=on HTTP/1.1..Host: example.com.. 1..                                                                                                                   
+
+T 127.0.0.1:80 -> 127.0.0.1:49552 [AP] #198
+  HTTP/1.1 404 Not Found..Server: nginx/1.18.0 (Ubuntu)..Date: Fri, 18 Sep 2020 19:32:17 GMT..Content-Type: text/html..Transfer-Encoding: chunked..Connection: keep-a
+  live..Content-Encoding: gzip....ba..............1..0..w..pn:.i..C."....? ..6.^$.`.... .....{..SMl...TC...6:.e^..G...Q.....Ih...,..HA...v$E..=d'h.....EV.........>Y9
+  ....B.0p3..k....M.......#l..[.k...z..|H..@...?..[<.*.I54.....0....   
+Вернулся код 404, значит страница не была найдена
+
+
+
+
+
+
+
+Графические клиенты, Iptables, ssh туннель
+
+Установить на сервере MySql или PostgreSQL. На машине WORKSTATION запустить графический клиент (MySql Workbench или DBeaver) и проверить доступ. При работе с виртуальной машиной клиент запускается через ssh -X
+
+ssh ekaterina@192.168.56.101
+установка:
+sudo apt install mysql-server mysql-client 
+sudo snap install  mysql-workbench-community
+Настраиваем пользователя
+sudo mysql -u root -p
+
+exit
+
+
+открываем mysql-workbench-community
+ssh -X ekaterina@192.168.56.101 mysql-workbench-community
+
+Закрываем доступ
+sudo iptables -A INPUT -p tcp --dport 3306 -j DROP
+ssh -L localhost:8080:localhost:3306 ekaterina@192.168.56.101  настраиваем ssh туннель
+Через ssh туннель доступ есть
+
+
+Проброс авторизации и создание туннеля через промежуточный узел
+
+Сгенерировать пару ключей. Приватный ключ выложить на WORKSTATION, публичный - на GATEWAY и SERVER.
+Средствами iptables на машине SERVER закрыть SSH (порт 22) для всех входящих запросов кроме тех, которые пришли с GATEWAY.
+С помощью ssh-agent настроить доступ с WORKSTATION на SERVER через промежуточный сервер GATEWAY (проброс авторизации). Далее вся работа с сервером происходит только через это соединение.
+Установить на сервере MySql, средствами iptables закрыть к нему доступ (закрыть порт 3306), проверить, что доступа нет. Настроить ssh туннель для доступа с WORKSTATION через GATEWAY. Запустить на WORKSTATION графический клиент (MySql Workbench или DBeaver) и проверить доступ. 
+
+gateway - 192.168.56.102
+server - 192.168.56.101
+
+ssh-copy-id -i id_rsa.pub ekaterina@192.168.56.102    отправляем публичный ключ на gateway, на сервере он уже есть
+sudo iptables -A INPUT -p tcp --dport 22 -j DROP     блокируем порт 22 для всех запросов
+iptables -A INPUT -s 192.168.56.102 -p tcp --dport 22 -j ACCEPT   разрешаем порт 22 gateway
+
+ssh -A ekaterina@192.168.56.102 ssh ekaterina@192.168.56.101   выполняем проброс авторизации
+
+sudo iptables -A INPUT -p tcp --dport 3306 -j DROP   закрываем порт 3306
+
+Настраиваем ssh туннель:
+ssh -tt -L localhost:8080:192.168.56.102:8080 ekaterina@192.168.56.102  ssh -L localhost:8080:localhost:3306 ekaterina@192.168.56.101
